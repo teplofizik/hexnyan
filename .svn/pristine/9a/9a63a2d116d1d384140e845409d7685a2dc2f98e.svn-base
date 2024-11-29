@@ -1,0 +1,76 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.IO;
+
+namespace hexnyan.parser
+{
+    class Output
+    {
+        static public void Binary(string FileName, byte[] Data)
+        {
+            FileStream fs = File.Create(FileName, 128, FileOptions.None);
+            BinaryWriter bw = new BinaryWriter(fs);
+
+            bw.Write(Data);
+
+            bw.Close();
+            fs.Close();
+        }
+
+        static string IntelHexLine(byte[] Data, int Line)
+        {
+            const int LineWidth = 16;
+            int Start = Line * LineWidth;
+            if (Start > Data.Length) return null;
+            int End = Start + LineWidth - 1;
+            if (End >= Data.Length) End = Data.Length - 1;
+
+            int Length = End - Start + 1;
+
+            string Result = "";
+            byte Checksum = 0;
+
+            Checksum += Convert.ToByte(Length & 0xFF);
+            Checksum += Convert.ToByte((Start >> 8) & 0xFF);
+            Checksum += Convert.ToByte((Start >> 0) & 0xFF);
+
+            // Start
+            Result += String.Format(":{0:X02}{1:X04}{2:X02}", Length, Start, 0);
+
+            // Data
+            for (int i = 0; i < Length; i++)
+            {
+                Checksum += Data[Start + i];
+                Result += String.Format("{0:X02}", Data[Start + i]);
+            }
+
+            // End
+            Result += String.Format("{0:X02}", (byte)(0x00 - Checksum));
+
+            return Result;
+        }
+
+
+        static public void IntelHex(string FileName, byte[] Data)
+        {
+            List<string> Out = new List<string>();
+
+            int Line = 0;
+            while (true)
+            {
+                string L = IntelHexLine(Data, Line++);
+                if (L == null) break;
+
+                Out.Add(L);
+            }
+            Out.Add(":00000001FF");
+
+            using (StreamWriter SW = new StreamWriter(FileName))
+            {
+                foreach (string O in Out) SW.WriteLine(O);
+            }
+        }
+    }
+}

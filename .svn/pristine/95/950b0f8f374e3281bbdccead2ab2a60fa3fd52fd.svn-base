@@ -1,0 +1,141 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace hexnyan
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Console.WriteLine("EEPROM generator [dev.]");
+
+            ParseArgs(args);
+            if (args.Length == 0) ShowHelp();
+        }
+
+        static void ShowHelp()
+        {
+            Console.WriteLine("Help:");
+            Console.WriteLine("EEPROM generator");
+            Console.WriteLine("");
+        }
+
+        static void ParseArgs(string[] args)
+        {
+            ArgumentParser Parser = new ArgumentParser(args);
+            List<Argument> ArgList = Parser.Arguments;
+            byte[] Data = null;
+
+            for (int i = 0; i < ArgList.Count; i++)
+            {
+                switch (ArgList[i].Name)
+                {
+                    case "n":
+                        Data = GenerateNew(ArgList[i].Value, ArgList[i].Arguments);
+                        break;
+                    case "m":
+                        Data = Modify(ArgList[i].Value, ArgList[i].Arguments);
+                        break;
+                    case "s":
+                        Save(ArgList[i].Value, ArgList[i].Arguments, Data);
+                        break;
+                }
+            }
+        }
+
+        static int GetFieldWidth(string Name)
+        {
+            int W = 0;
+
+            try
+            {
+                W = Convert.ToInt16(Name.Substring(1));
+            }
+            catch { }
+
+            return W;
+        }
+
+        static void Save(string Argument, List<Argument> ArgList, byte[] Data)
+        {
+            string FileName = Argument;
+            string FileType = "bin";
+
+            if (Data == null) return;
+
+            foreach (Argument A in ArgList)
+            {
+                string Value = A.Value;
+                switch (A.Name)
+                {
+                    case "format": FileType = Value; break;
+                }
+            }
+
+            switch (FileType)
+            {
+                case "hex":
+                case "ihex":
+                    parser.Output.IntelHex(FileName, Data);
+                    break;
+                case "bin":
+                default:
+                    parser.Output.Binary(FileName, Data);
+                    break;
+            }
+        }
+
+        static byte[] Modify(string Argument, List<Argument> ArgList)
+        {
+            List<parser.PreparsedElement> Preparsed = parser.Parser.Load(Argument);
+            if (Preparsed == null) return null;
+
+            foreach (Argument A in ArgList)
+            {
+                for (int i = 0; i < Preparsed.Count; i++)
+                {
+                    parser.PreparsedElement PE = Preparsed[i];
+
+                    if(PE.Name.Length == 0) continue;
+                    if (PE.Name.CompareTo(A.Name) == 0) PE.Value = A.Value;
+                }
+            }
+
+            List<eeprom.Element> Elements = parser.Parser.Parse(Preparsed);
+            return parser.Linker.Link(Elements);
+        }
+
+        static byte[] GenerateNew(string Argument, List<Argument> ArgList)
+        {
+            List<parser.PreparsedElement> Preparsed = new List<parser.PreparsedElement>();
+
+            foreach (Argument A in ArgList)
+            {
+                string Value = A.Value;
+                switch (A.Name)
+                {
+                    case "H": Preparsed.Add(new parser.PreparsedElement("H", Value.Substring(0, 2))); break;
+                    case "u8": Preparsed.Add(new parser.PreparsedElement("u8", Value)); break;
+                    case "u16": Preparsed.Add(new parser.PreparsedElement("u16", Value)); break;
+                    case "u32": Preparsed.Add(new parser.PreparsedElement("u32", Value)); break;
+                    default:
+                        switch (A.Name[0])
+                        {
+                            case 'S': // string
+                            case 'P': // padding
+                            case 'X': // hex
+                                Preparsed.Add(new parser.PreparsedElement(A.Name[0] + "", Value, GetFieldWidth(A.Name)));
+                                break;
+                        }
+                        break;
+                }
+            }
+
+            List<eeprom.Element> Elements = parser.Parser.Parse(Preparsed);
+            return parser.Linker.Link(Elements);
+        }
+    }
+}

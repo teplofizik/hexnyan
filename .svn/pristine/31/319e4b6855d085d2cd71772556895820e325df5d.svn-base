@@ -1,0 +1,180 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace hexnyan.parser
+{
+    class Parser
+    {
+        static byte ParseU8Hex(string Value)
+        {
+            byte T = 0;
+            try
+            {
+                T = Convert.ToByte(Value, 16);
+            }
+            catch { }
+
+            return T;
+        }
+
+        static byte ParseU8(string Value)
+        {
+            byte T = 0;
+            try
+            {
+                T = Convert.ToByte(Value);
+            }
+            catch { }
+
+            return T;
+        }
+
+        static UInt16 ParseU16(string Value)
+        {
+            UInt16 T = 0;
+            try
+            {
+                T = Convert.ToUInt16(Value);
+            }
+            catch { }
+
+            return T;
+        }
+
+        static UInt32 ParseU32(string Value)
+        {
+            UInt32 T = 0;
+            try
+            {
+                T = Convert.ToUInt32(Value);
+            }
+            catch { }
+
+            return T;
+        }
+
+        static UInt64 ParseU64(string Value)
+        {
+            UInt64 T = 0;
+            try
+            {
+                T = Convert.ToUInt64(Value);
+            }
+            catch { }
+
+            return T;
+        }
+
+
+        static byte[] ParseHex(string Value)
+        {
+            if(Value == null) return null;
+
+            List<byte> R = new List<byte>();
+            for (int i = 0; i < Value.Length / 2; i++)
+            {
+                string Hex = Value.Substring(i * 2, 2);
+
+                R.Add(ParseU8Hex(Hex));
+            }
+
+            return (R.Count > 0) ? R.ToArray() : null;
+        }
+
+        static public List<eeprom.Element> Parse(List<PreparsedElement> Elements)
+        {
+            List<eeprom.Element> Result = new List<eeprom.Element>();
+
+            foreach (PreparsedElement E in Elements)
+            {
+                if (E.Width == 0) continue;
+
+                switch (E.FieldType)
+                {
+                    case "H": Result.Add(new eeprom.U8(ParseU8Hex(E.Value))); break;
+                    case "U8":
+                    case "u8": Result.Add(new eeprom.U8(ParseU8(E.Value))); break;
+                    case "u16": Result.Add(new eeprom.U16(ParseU16(E.Value))); break;
+                    case "u32": Result.Add(new eeprom.U32(ParseU32(E.Value))); break;
+                    case "u48": Result.Add(new eeprom.U48(ParseU64(E.Value))); break;
+                    case "U16": Result.Add(new eeprom.U16be(ParseU16(E.Value))); break;
+                    case "U32": Result.Add(new eeprom.U32be(ParseU32(E.Value))); break;
+                    case "U48": Result.Add(new eeprom.U48be(ParseU64(E.Value))); break;
+                    case "S": Result.Add(new eeprom.S(E.Width, E.Value)); break;
+                    case "X": Result.Add(new eeprom.X(E.Width, ParseHex(E.Value))); break;
+                    case "P": Result.Add(new eeprom.P(E.Width, ParseU8(E.Value))); break;
+                }
+            }
+
+            return Result;
+        }
+
+        static int GetFieldWidth(string Name)
+        {
+            int W = 0;
+
+            try
+            {
+                W = Convert.ToInt16(Name.Substring(1));
+            }
+            catch { }
+
+            return W;
+        }
+
+        static public List<PreparsedElement> Load(string FileName)
+        {
+            CONF.XmlLoad X = new CONF.XmlLoad();
+            if (!X.Load(FileName)) return null;
+
+            List<PreparsedElement> Elements = new List<PreparsedElement>();
+
+            while (X.Read())
+            {
+                string Name = X.GetAttribute("name");
+                string Default = X.GetAttribute("default");
+                string Comment = X.GetAttribute("comment");
+
+                switch(X.ElementName)
+                {
+                    case "u8":
+                    case "u16":
+                    case "u32":
+                    case "u48":
+                    case "U8":
+                    case "U16":
+                    case "U32":
+                    case "U48":
+                        {
+                            PreparsedElement E = new PreparsedElement(X.ElementName, Default);
+                            E.Name = Name;
+                            E.Comment = Comment;
+                            Elements.Add(E);
+                        }
+                        break;
+                    default:
+                        switch (X.ElementName[0])
+                        {
+                            case 'S': // string
+                            case 'P': // padding
+                            case 'X': // hex
+                                {
+                                    PreparsedElement E = new parser.PreparsedElement(X.ElementName[0] + "", Default, GetFieldWidth(X.ElementName));
+                                    E.Name = Name;
+                                    E.Comment = Comment;
+                                    Elements.Add(E);
+                                }
+                                break;
+                        }
+                        break;
+                }
+            }
+
+            X.Close();
+
+            return Elements;
+        }
+    }
+}
